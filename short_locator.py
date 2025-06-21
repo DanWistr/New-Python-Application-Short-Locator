@@ -90,11 +90,6 @@ def launch_with_elevated_privileges(exe_path):
     if ret <= 32:  # If the return value is 32 or less, it indicates an error.
         raise Exception(f"Failed to launch {exe_path} with elevated privileges. Return code: {ret}")
 
-# Set up the GUI
-root = ctk.CTk()
-root.title("Capture Success")
-root.withdraw()
-
 def monitor_application(process_name):
     """Monitor if the application is running and terminate the script if it closes."""
     try:
@@ -107,6 +102,12 @@ def monitor_application(process_name):
     except Exception as e:
         print(f"Error occurred during application monitoring: {e}")
         os._exit(1)  # Terminate the script in case of an error
+
+
+# Set up the GUI
+root = ctk.CTk()
+root.title("Capture Success")
+root.withdraw()
 
 # Launch ShortCam II only if it's not already running
 if not is_process_running("ShortCam II.exe"):
@@ -181,17 +182,9 @@ model_label.grid(row=0, column=1, sticky="w", padx=(20, 0))
 model_entry = ctk.CTkEntry(content_frame, height=40, font=ctk.CTkFont(size=14))
 model_entry.grid(row=1, column=1, sticky="ew", pady=5, padx=(20, 0))
 
-# --- FAILURE DESCRIPTION ---
-description_label = ctk.CTkLabel(content_frame, text="FAILURE DESCRIPTION:", font=ctk.CTkFont(size=16))
-description_label.grid(row=7, column=0, columnspan=2, sticky="w", pady=(20, 5))
-
-# Textbox is correct for multi-line descriptions
-description_text_field = ctk.CTkTextbox(content_frame, height=160, border_color="black", border_width=1)
-description_text_field.grid(row=8, column=0, columnspan=2, sticky="ew")
-
 # --- OVERHEATING COMPONENT DETAILS ---
 overheating_label = ctk.CTkLabel(content_frame, text="OVERHEATING COMPONENT DETAILS", font=ctk.CTkFont(size=18, weight="bold"))
-overheating_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=(40, 20))
+overheating_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=(10, 10))
 
 pn_label = ctk.CTkLabel(content_frame, text="PN of Detected Component:", font=ctk.CTkFont(size=14))
 pn_label.grid(row=3, column=0, columnspan=2, sticky="w", padx=300, pady=(0, 5))
@@ -205,15 +198,37 @@ part_label.grid(row=5, column=0, columnspan=2, sticky="w", padx=300, pady=(20, 5
 part_entry = ctk.CTkEntry(content_frame, height=40, font=ctk.CTkFont(size=14))
 part_entry.grid(row=6, column=0, columnspan=2, sticky="ew", padx=300)
 
+# --- FAILURE DESCRIPTION ---
+description_label = ctk.CTkLabel(content_frame, text="FAILURE DESCRIPTION:", font=ctk.CTkFont(size=16))
+description_label.grid(row=7, column=0, columnspan=2, sticky="w", pady=(20, 5))
+
+# Textbox is correct for multi-line descriptions
+description_text_field = ctk.CTkTextbox(content_frame, height=160, border_color="black", border_width=1)
+description_text_field.grid(row=8, column=0, columnspan=2, sticky="ew")
+
 # --- Buttons Frame (to group SAVE and CANCEL) ---
 button_frame = ctk.CTkFrame(root, fg_color="transparent")
-button_frame.grid(row=10, column=0, pady=(20, 40))
+button_frame.grid(row=8, column=0, pady=(0, 10))  # Align frame to the left
 
+# Variable to store radio button selection
+result_var = ctk.StringVar(value="")  # You can set "PASS" or "FAIL" as default if needed
+
+# --- Sub-frame for radio buttons aligned to left ---
+radio_frame = ctk.CTkFrame(content_frame, fg_color="transparent")
+radio_frame.grid(row=9, column=0, columnspan=2, sticky="w", padx=20, pady=(30, 0))  # Align to left within the frame
+
+pass_rdbutton = ctk.CTkRadioButton(radio_frame, text="PASS", variable=result_var, value="PASS")
+pass_rdbutton.grid(row=0, column=0, padx=(0, 20), pady=(0, 20))
+
+fail_rdbutton = ctk.CTkRadioButton(radio_frame, text="FAIL", variable=result_var, value="FAIL")
+fail_rdbutton.grid(row=0, column=1, pady=(0, 20))
+
+# --- Buttons ---
 save_button = ctk.CTkButton(button_frame, text="SAVE", width=140, height=40, text_color="white", font=ctk.CTkFont(size=20, weight="bold"))
-save_button.grid(row=0, column=0, padx=10)
+save_button.grid(row=1, column=0, padx=10, sticky = "ew")
 
 cancel_button = ctk.CTkButton(button_frame, text="CANCEL", width=140, height=40, text_color="white", fg_color="#873535", hover_color="#581A1A", font=ctk.CTkFont(size=20, weight="bold"), command=on_closing)
-cancel_button.grid(row=0, column=1, padx=10)
+cancel_button.grid(row=1, column=1, padx=10, sticky = "ew")
 
 # — start watching in the background —
 monitor_thread = threading.Thread(target=monitor_directory, args=(root,), daemon=True)
