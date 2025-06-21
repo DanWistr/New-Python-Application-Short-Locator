@@ -6,6 +6,7 @@ import time
 import threading
 from PIL import Image
 import psutil
+import pyodbc
 import tkinter.messagebox as mb
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -19,6 +20,17 @@ server = r'10.45.41.79,1433\\WPH-CRE100SVR\\SQLEXPRESS' #r'DESKTOP-OVSME7R\SQLEX
 database = 'Short_Locator_DB' #'ShortLocator'
 username = 'CREWISTRON'#'CBE100'
 password = 'cre100' #'CBE100'
+
+# Establish SQL Connection
+try:
+    sql_connection = pyodbc.connect('DRIVER={ODBC Driver 17 for SQL Server};'
+                                    'SERVER=' + server + ';'
+                                    'DATABASE=' + database + ';'
+                                    'UID=' + username + ';'
+                                    'PWD=' + password + ';')
+    print("Connected to SQL Server successfully")
+except Exception as e:
+    print("Error while connecting to SQL Server", e)
 
 def load_latest_image(delay=500, max_retries=5):
     """
@@ -120,6 +132,7 @@ def monitor_application(process_name):
         while True:
             # Check if the process is running
             if not is_process_running(process_name):
+                sql_connection.close()
                 print(f"{process_name} has been closed. Terminating script.")
                 os._exit(0)  # Forcefully terminate the script
             time.sleep(2)  # Poll every 2 seconds to reduce CPU usage
