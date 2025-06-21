@@ -22,15 +22,41 @@ database = 'Short_Locator_DB' #'ShortLocator'
 username = 'CREWISTRON'#'CBE100'
 password = 'cre100' #'CBE100'
 
+def load_latest_image(delay=500, max_retries=5):
+    """
+    Try to open the newest JPG; if Pillow can’t identify it,
+    wait `delay` ms and retry up to `max_retries` times.
+    """
+    latest = get_latest_image(WATCH_DIR)
+    if not latest:
+        pil = Image.new("RGB", (293, 220), color="gray")
+    else:
+        try:
+            # try to open and fully load the file
+            pil = Image.open(latest)
+            pil.load()
+        except Exception:
+            if max_retries > 0:
+                # schedule another attempt after `delay` ms
+                root.after(delay, lambda: load_latest_image(delay, max_retries-1))
+            return
+
+    # if we get here, `pil` is valid
+    ctk_img = ctk.CTkImage(light_image=pil, size=(293, 220))
+    image_label.configure(image=ctk_img)
+    image_label.image = ctk_img  # keep a reference
+
 class JpegCreatedHandler(FileSystemEventHandler):
     def __init__(self, tk_root):
         super().__init__()
         self.tk_root = tk_root
 
     def on_created(self, event):
-        if not event.is_directory and event.src_path.lower().endswith('.jpg'):
-            # then show the window, etc.
+        if (not event.is_directory) and event.src_path.lower().endswith('.jpg'):
+            # show the window
             self.tk_root.after(0, self.tk_root.deiconify)
+            # attempt to load the new image (with retries)
+            self.tk_root.after(0, load_latest_image)
 
 def monitor_directory(tk_root):
 
@@ -103,6 +129,51 @@ def monitor_application(process_name):
         print(f"Error occurred during application monitoring: {e}")
         os._exit(1)  # Terminate the script in case of an error
 
+def get_latest_image(directory):
+    jpg_files = [f for f in os.listdir(directory) if f.lower().endswith(".jpg")]
+    if not jpg_files:
+        return None
+    latest_file = max(
+        [os.path.join(directory, f) for f in jpg_files],
+        key=os.path.getmtime
+    )
+    return latest_file
+
+def save_function():
+    # 1) Gather text inputs
+    serial      = serial_entry.get().strip()
+    model       = model_entry.get().strip()
+    pn          = pn_entry.get().strip()
+    part        = part_entry.get().strip()
+    description = description_text_field.get("1.0", "end").strip()
+
+    # 2) Radio button value
+    result = result_var.get() 
+
+    # 3) Latest image path
+    img_path = get_latest_image(WATCH_DIR)
+
+    if not serial or not model or not pn or not part or not description or not result or not img_path:
+        mb.showwarning("Incomplete Input", "Please make sure you've filled up everything.")
+        return
+
+    print("=== Saved Record ===")
+    print(f"S/N:         {serial}")
+    print(f"Model:       {model}")
+    print(f"PN:          {pn}")
+    print(f"Part Type:   {part}")
+    print(f"Description: {description}")
+    print(f"Result:      {result}")
+    print(f"Image saved: {img_path}")
+
+    mb.showinfo("Saved", "Record and image have been saved successfully.")
+
+    serial_entry.delete(0, ctk.END)
+    model_entry.delete(0, ctk.END)
+    pn_entry.delete(0, ctk.END)
+    part_entry.delete(0, ctk.END)
+    description_text_field.delete("1.0", "end")
+    root.withdraw()
 
 # Set up the GUI
 root = ctk.CTk()
@@ -128,7 +199,6 @@ app_monitor_thread = threading.Thread(
 app_monitor_thread.start()
 
 ######################################################## USER INTERFACE ######################################################
-
 
 # Desired window size
 window_width = 1050
@@ -172,31 +242,42 @@ serial_label = ctk.CTkLabel(content_frame, text="S/N:", font=ctk.CTkFont(size=16
 serial_label.grid(row=0, column=0, sticky="w")
 
 # Using CTkEntry for single-line input
-serial_entry = ctk.CTkEntry(content_frame, height=40, font=ctk.CTkFont(size=14))
+serial_entry = ctk.CTkEntry(content_frame, height=40, font=ctk.CTkFont(size=14), width=430)
 serial_entry.grid(row=1, column=0, sticky="ew", pady=5, padx=(0, 20))
 
 model_label = ctk.CTkLabel(content_frame, text="MODEL:", font=ctk.CTkFont(size=16, weight="bold"))
-model_label.grid(row=0, column=1, sticky="w", padx=(20, 0))
+model_label.grid(row=0, column=1, sticky="w", padx=(0, 0))
 
 # Using CTkEntry for single-line input
 model_entry = ctk.CTkEntry(content_frame, height=40, font=ctk.CTkFont(size=14))
-model_entry.grid(row=1, column=1, sticky="ew", pady=5, padx=(20, 0))
+model_entry.grid(row=1, column=1, sticky="ew", pady=5, padx=(0, 0))
 
 # --- OVERHEATING COMPONENT DETAILS ---
 overheating_label = ctk.CTkLabel(content_frame, text="OVERHEATING COMPONENT DETAILS", font=ctk.CTkFont(size=18, weight="bold"))
 overheating_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=(10, 10))
 
 pn_label = ctk.CTkLabel(content_frame, text="PN of Detected Component:", font=ctk.CTkFont(size=14))
-pn_label.grid(row=3, column=0, columnspan=2, sticky="w", padx=300, pady=(0, 5))
+pn_label.grid(row=3, column=0, columnspan=2, sticky="ws", padx=30)
 
-pn_entry = ctk.CTkEntry(content_frame, height=40, font=ctk.CTkFont(size=14))
-pn_entry.grid(row=4, column=0, columnspan=2, sticky="ew", padx=300)
+pn_entry = ctk.CTkEntry(content_frame, height=40,width=300, font=ctk.CTkFont(size=14))
+pn_entry.grid(row=4, column=0, columnspan=3, sticky="w", padx=30)
 
 part_label = ctk.CTkLabel(content_frame, text="Part Type of Detected Component:", font=ctk.CTkFont(size=14))
-part_label.grid(row=5, column=0, columnspan=2, sticky="w", padx=300, pady=(20, 5))
+part_label.grid(row=5, column=0, columnspan=2, sticky="ws", padx=30)
 
-part_entry = ctk.CTkEntry(content_frame, height=40, font=ctk.CTkFont(size=14))
-part_entry.grid(row=6, column=0, columnspan=2, sticky="ew", padx=300)
+part_entry = ctk.CTkEntry(content_frame, width=300, height=40, font=ctk.CTkFont(size=14))
+part_entry.grid(row=6, column=0, columnspan=3, sticky="w", padx=30)
+
+# initialize the label with whatever’s already there
+latest_image_path = get_latest_image(WATCH_DIR)
+if latest_image_path:
+    img = Image.open(latest_image_path)
+else:
+    img = Image.new("RGB", (293, 220), color="gray")
+image_ctk = ctk.CTkImage(light_image=img, size=(293, 220))
+image_label = ctk.CTkLabel(content_frame, image=image_ctk, text="")
+image_label.image = image_ctk  # save reference
+image_label.grid(row=3, column=1, rowspan=4, padx=(30, 0), pady=(0, 0), sticky="ew")
 
 # --- FAILURE DESCRIPTION ---
 description_label = ctk.CTkLabel(content_frame, text="FAILURE DESCRIPTION:", font=ctk.CTkFont(size=16))
@@ -224,7 +305,7 @@ fail_rdbutton = ctk.CTkRadioButton(radio_frame, text="FAIL", variable=result_var
 fail_rdbutton.grid(row=0, column=1, pady=(0, 20))
 
 # --- Buttons ---
-save_button = ctk.CTkButton(button_frame, text="SAVE", width=140, height=40, text_color="white", font=ctk.CTkFont(size=20, weight="bold"))
+save_button = ctk.CTkButton(button_frame, text="SAVE", width=140, height=40, text_color="white", font=ctk.CTkFont(size=20, weight="bold"), command=save_function)
 save_button.grid(row=1, column=0, padx=10, sticky = "ew")
 
 cancel_button = ctk.CTkButton(button_frame, text="CANCEL", width=140, height=40, text_color="white", fg_color="#873535", hover_color="#581A1A", font=ctk.CTkFont(size=20, weight="bold"), command=on_closing)
