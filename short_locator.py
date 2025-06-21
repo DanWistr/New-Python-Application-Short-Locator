@@ -1,8 +1,12 @@
+import ctypes
+import os
+import sys
 import customtkinter as ctk
 import time
 import threading
 import subprocess
 from PIL import Image
+import psutil
 import win32gui
 import tkinter.messagebox as mb
 from watchdog.observers import Observer
@@ -49,7 +53,7 @@ def on_closing():
     part        = part_entry.get()
     description = description_text_field.get("1.0", "end").strip()
     
-    if serial and model and pn and part and description:
+    if serial or model or pn or part or description:
         answer = mb.askyesno(
             title="Confirm Close",
             message="Are you sure you want to close?\nUnsaved data will be lost."
@@ -72,11 +76,58 @@ def on_closing():
         description_text_field.delete("1.0", "end")
         root.withdraw()
 
+def is_process_running(process_name):
+    for process in psutil.process_iter(attrs=['name']):
+        if process.info['name'] == process_name:
+            return True
+    return False
 
-######################################################## USER INTERFACE ######################################################
+def launch_with_elevated_privileges(exe_path):
+    """Launch application with elevated privileges."""
+    shell32 = ctypes.windll.shell32
+    # Use ShellExecute to run the executable with 'runas' (elevated privileges)
+    ret = shell32.ShellExecuteW(None, "runas", exe_path, None, None, 1)
+    if ret <= 32:  # If the return value is 32 or less, it indicates an error.
+        raise Exception(f"Failed to launch {exe_path} with elevated privileges. Return code: {ret}")
+
+# Set up the GUI
 root = ctk.CTk()
 root.title("Capture Success")
 root.withdraw()
+
+def monitor_application(process_name):
+    """Monitor if the application is running and terminate the script if it closes."""
+    try:
+        while True:
+            # Check if the process is running
+            if not is_process_running(process_name):
+                print(f"{process_name} has been closed. Terminating script.")
+                os._exit(0)  # Forcefully terminate the script
+            time.sleep(2)  # Poll every 2 seconds to reduce CPU usage
+    except Exception as e:
+        print(f"Error occurred during application monitoring: {e}")
+        os._exit(1)  # Terminate the script in case of an error
+
+# Launch ShortCam II only if it's not already running
+if not is_process_running("ShortCam II.exe"):
+    try:
+        launch_with_elevated_privileges(EXE_PATH)
+    except Exception as e:
+        print(f"Failed to launch ShortCam II: {e}")
+        sys.exit(1)  # Exit the script if the application could not be launched
+else:
+    print("ShortCam II is already running.")
+
+# Start a thread to monitor the application for closures
+app_monitor_thread = threading.Thread(
+    target=monitor_application, 
+    args=("ShortCam II.exe",), 
+    daemon=True  # Allows the thread to terminate when the main program exits
+)
+app_monitor_thread.start()
+
+######################################################## USER INTERFACE ######################################################
+
 
 # Desired window size
 window_width = 1050
