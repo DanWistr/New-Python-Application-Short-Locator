@@ -4,10 +4,8 @@ import sys
 import customtkinter as ctk
 import time
 import threading
-import subprocess
 from PIL import Image
 import psutil
-import win32gui
 import tkinter.messagebox as mb
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -179,6 +177,8 @@ def save_function():
 root = ctk.CTk()
 root.title("Capture Success")
 root.withdraw()
+root.overrideredirect(True)
+root.attributes("-topmost", True)
 
 # Launch ShortCam II only if it's not already running
 if not is_process_running("ShortCam II.exe"):
