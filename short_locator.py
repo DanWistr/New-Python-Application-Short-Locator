@@ -7,6 +7,7 @@ import threading
 from PIL import Image
 import psutil
 import pyodbc
+import numpy as np
 import tkinter.messagebox as mb
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -69,7 +70,6 @@ class JpegCreatedHandler(FileSystemEventHandler):
             self.tk_root.after(0, load_latest_image)
 
 def monitor_directory(tk_root):
-
     handler  = JpegCreatedHandler(tk_root)
     observer = Observer()
     observer.schedule(handler, WATCH_DIR, recursive=False)
@@ -150,6 +150,96 @@ def get_latest_image(directory):
     )
     return latest_file
 
+def downscale_and_binary(image_path):
+    downscale_size = (720, 720)
+    try:
+        # Open the image
+        img = Image.open(image_path)
+        img = img.convert("RGB")
+        img_resized = img.resize(downscale_size, Image.Resampling.LANCZOS)
+        
+        # Save the downscaled image to a temporary file (optional)
+        downscaled_temp_path = "captured/downscaled_temp.jpg"
+        img_resized.save(downscaled_temp_path)
+
+        # Convert the downscaled image to binary data
+        with open(downscaled_temp_path, "rb") as temp_file:
+            binary_data = temp_file.read()
+
+        # Clean up the temporary file
+        os.remove(downscaled_temp_path)
+
+        return binary_data  # Return only the binary data
+
+    except Exception as e:
+        print("Error:", str(e))
+        return None
+
+def save_to_sql():
+    """
+    Save the form fields, radio button selection, and image reference to the SQL database.
+    """
+    # Gather input data
+    serial = serial_entry.get().strip()
+    model = model_entry.get().strip()
+    pn = pn_entry.get().strip()
+    part = part_entry.get().strip()
+    description = description_text_field.get("1.0", "end").strip()
+    result = result_var.get()  # Radio buttons: PASS or FAIL
+    img_path = get_latest_image(WATCH_DIR)  # Get the latest image path
+
+    # Downscale and get binary image data
+    binary_data = downscale_and_binary(img_path) if img_path else None
+
+    file_name = os.path.basename(img_path) if img_path else None
+
+    # Validate required fields
+    if not serial or not model or not pn or not part or not result or not binary_data:
+        mb.showwarning("Incomplete Input", "Please ensure all fields are filled, and the image is available.")
+        return
+    
+    try:
+        # Insert data into the SQL database
+        cursor = sql_connection.cursor()
+
+        # Define SQL query
+        insert_query = """
+        INSERT INTO [Short_Locator_DB].[dbo].[analysis] 
+        ([SN], [Model], [MB_Issue], [PN_Component], [Part_Type], [Result], [File_Name], [Reference_Picture], [Date_Inspected])
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, GETDATE())
+        """
+        
+        # Execute the query
+        cursor.execute(insert_query,                       serial,  # SN
+                       model,   # Model
+                       description,  # MB_Issue (mapped from Failure Description)
+                       pn,  # PN_Component
+                       part,  # Part_Type
+                       result,  # Result (PASS/FAIL)
+                       file_name,  # File_Name (basename of the latest image path)
+                       binary_data)   # Reference_Picture (binary format of the image)
+
+        # Commit the transaction
+        sql_connection.commit()
+
+        # Notify the user of success
+        mb.showinfo("Success", "Record saved successfully to the database.")
+
+        # Clear the form fields after saving
+        serial_entry.delete(0, ctk.END)
+        model_entry.delete(0, ctk.END)
+        pn_entry.delete(0, ctk.END)
+        part_entry.delete(0, ctk.END)
+        description_text_field.delete("1.0", "end")
+
+        # Hide the form
+        root.withdraw()
+
+    except Exception as e:
+        # Rollback transaction in case of an error
+        sql_connection.rollback()
+        mb.showerror("Database Error", f"An error occurred while saving to the database:\n {e}")
+
 def save_function():
     # 1) Gather text inputs
     serial      = serial_entry.get().strip()
@@ -168,23 +258,20 @@ def save_function():
         mb.showwarning("Incomplete Input", "Please make sure you've filled up everything.")
         return
 
-    print("=== Saved Record ===")
-    print(f"S/N:         {serial}")
-    print(f"Model:       {model}")
-    print(f"PN:          {pn}")
-    print(f"Part Type:   {part}")
-    print(f"Description: {description}")
-    print(f"Result:      {result}")
-    print(f"Image saved: {img_path}")
+    try:
+        save_to_sql()
 
-    mb.showinfo("Saved", "Record and image have been saved successfully.")
+        print("=== Saved Record ===")
+        print(f"S/N:         {serial}")
+        print(f"Model:       {model}")
+        print(f"PN:          {pn}")
+        print(f"Part Type:   {part}")
+        print(f"Description: {description}")
+        print(f"Result:      {result}")
+        print(f"Image saved: {img_path}")
 
-    serial_entry.delete(0, ctk.END)
-    model_entry.delete(0, ctk.END)
-    pn_entry.delete(0, ctk.END)
-    part_entry.delete(0, ctk.END)
-    description_text_field.delete("1.0", "end")
-    root.withdraw()
+    except Exception as e:
+        print(e)
 
 # Set up the GUI
 root = ctk.CTk()
@@ -287,6 +374,7 @@ if latest_image_path:
     img = Image.open(latest_image_path)
 else:
     img = Image.new("RGB", (293, 220), color="gray")
+
 image_ctk = ctk.CTkImage(light_image=img, size=(293, 220))
 image_label = ctk.CTkLabel(content_frame, image=image_ctk, text="")
 image_label.image = image_ctk  # save reference
