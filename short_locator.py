@@ -16,11 +16,11 @@ from watchdog.events import FileSystemEventHandler
 EXE_PATH = r"C:\ShortCam II\ShortCam II.exe"
 WATCH_DIR  = r"C:\ShortCam II\Record"
 APP_NAME = "ShortCam II"
-Camera_ID = "USB\\VID_0525&PID_A4A2\\SHORCAMII:2022" # Device Instance Path
-server = r'10.45.41.79,1433\\WPH-CRE100SVR\\SQLEXPRESS' #r'DESKTOP-OVSME7R\SQLEXPRESS01' 
+Camera_ID = "" # Device Instance Path
+server = r'' 
 database = 'Short_Locator_DB' #'ShortLocator'
-username = 'CREWISTRON'#'CBE100'
-password = 'cre100' #'CBE100'
+username = ''#'CBE100'
+password = '' #'CBE100'
 
 # Establish SQL Connection
 try:
